@@ -1,9 +1,9 @@
 /*
  *  Please write your name and net ID below
  *  
- *  Last name:
- *  First name:
- *  Net ID: 
+ *  Last name: Lukiman
+ *  First name: Michael
+ *  Net ID: mll469
  * 
  */
 
@@ -165,9 +165,44 @@ void  seq_heat_dist(float * playground, unsigned int N, unsigned int iterations)
 
 /***************** The GPU version: Write your code here *********************/
 /* This function can call one or more kernels if you want ********************/
+
+// There will be two main functions that can be parallelized: one to average individual points around each point and one to update the current matrix's points for the next iteration to work with. 
+
+__global__ void spread_to_point(int N, float * grid, int iterations) 
+{ // Averages the four surrounding points to update a single point.
+
+  // Let's make a grid-stride with a 2D grid, to fit the problem.
+
+  int i = blockDim.x * blockIdx.x +threadIdx.x; // Current block and current thread for the i-coord.
+  int j = blockDim.y * blockIdx.y +threadIdx.y; // Current block and current thread for the j-coord.
+
+  if ((i > 0 && i < N-1) && (j > 0 && j < N-1)) 
+    g[i * N + j] = ( // Multiply N by i (the row #) since the input data still represents the matrix as a 1D structure. 
+      h[(i-1) * N + j] + 
+      h[(i+1) * N + j] + 
+      h[i * N + (j-1)] + 
+      h[i * N + (j+1)]
+      ) / 4;
+}
+
+__global__ void initialize_edges(int N, float * grid, int iterations) 
+{ // Checks if a point is on the edge or not. This is used only once, to efficiently initialize values.
+
+  int i = blockDim.x * blockIdx.x +threadIdx.x; // Current block and current thread for the i-coord.
+  int j = blockDim.y * blockIdx.y +threadIdx.y; // Current block and current thread for the j-coord.
+
+  int index = i * N + j;
+  if (i==0 || i==N) 
+  {
+    
+  }
+}
+
+
 void  gpu_heat_dist(float * playground, unsigned int N, unsigned int iterations)
 {
-  
+  int size = N * N * sizeof(float); 
+  float 
   
   
 }
