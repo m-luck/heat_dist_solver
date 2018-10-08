@@ -13,7 +13,7 @@
  * You do not need to modify anything except starting  gpu_heat_dist() at the bottom
  * of this file.
  * In gpu_heat_dist() you can organize your data structure and the call to your
- * kernel(s) that you need to write too. 
+ * kernel(s) that you need to write to. 
  * 
  * You compile with:
  * 		nvcc -o heatdist -arch=sm_60 heatdist.cu   
@@ -120,7 +120,7 @@ int main(int argc, char * argv[])
 }
 
 
-/*****************  The CPU sequential version (DO NOT CHANGE THAT) **************/
+/*****************  The CPU sequential version (DO NOT CHANGE THIS) **************/
 void  seq_heat_dist(float * playground, unsigned int N, unsigned int iterations)
 {
   // Loop indices
@@ -168,7 +168,7 @@ void  seq_heat_dist(float * playground, unsigned int N, unsigned int iterations)
 
 // There will be two main functions that can be parallelized: one to average individual points around each point and one to update the current matrix's points for the next iteration to work with. 
 
-__global__ void spread_to_point(int N, float * grid, int iterations) 
+__global__ void spread_to_point(int N, float * current, float * fresh) 
 { // Averages the four surrounding points to update a single point.
 
   // Let's make a grid-stride with a 2D grid, to fit the problem.
@@ -177,33 +177,68 @@ __global__ void spread_to_point(int N, float * grid, int iterations)
   int j = blockDim.y * blockIdx.y +threadIdx.y; // Current block and current thread for the j-coord.
 
   if ((i > 0 && i < N-1) && (j > 0 && j < N-1)) 
-    g[i * N + j] = ( // Multiply N by i (the row #) since the input data still represents the matrix as a 1D structure. 
-      h[(i-1) * N + j] + 
-      h[(i+1) * N + j] + 
-      h[i * N + (j-1)] + 
-      h[i * N + (j+1)]
+    fresh[i * N + j] = ( // Multiply N by i (the row #) since the input data still represents the matrix as a 1D structure. 
+      current[(i-1) * N + j] + 
+      current[(i+1) * N + j] + 
+      current[i * N + (j-1)] + 
+      current[i * N + (j+1)]
       ) / 4;
 }
 
-__global__ void initialize_edges(int N, float * grid, int iterations) 
-{ // Checks if a point is on the edge or not. This is used only once, to efficiently initialize values.
+__global__ void overwrite_current_iteration(int N, float * current, float * fresh) 
+{ // After computing all values using the old iteration, this function will make the new values take the old values' places. 
+
+  // Again let's make a grid-stride with a 2D grid only to fit the problem.
 
   int i = blockDim.x * blockIdx.x +threadIdx.x; // Current block and current thread for the i-coord.
   int j = blockDim.y * blockIdx.y +threadIdx.y; // Current block and current thread for the j-coord.
 
-  int index = i * N + j;
-  if (i==0 || i==N) 
-  {
-    
-  }
+  int index = i * N + j; 
+
+  current[index] = fresh[index];
 }
+
+// The two commented functions below were anticipating writing parallel code to initialize the mesh temperatures (parallelized instead of sequential), however that is already done sequentially in main(), so the two below are not needed, but may be conceptually useful.  
+
+// __global__ void initialize_edges_or_not(int N, float * grid, int iterations) 
+// { // Checks if a point is on the edge or not, setting to 70 and 0 respectively.  This is used only once, to efficiently initialize values.
+
+//   int i = blockDim.x * blockIdx.x +threadIdx.x; // Current block and current thread for the i-coord.
+//   int j = blockDim.y * blockIdx.y +threadIdx.y; // Current block and current thread for the j-coord.
+
+//   int index = i * N + j;
+
+//   if ( index == 0 || index == N - 1 ) 
+//   {
+//     h[index] = 70;
+//   }
+//   else if ( index%N == 0 ) 
+//   {
+//     h[index] = 70;
+//   } 
+//   else {
+//     h[index] = 0;
+//   }
+// }
+
+// __global__ void initialize_special_sections(int N, float * grid, int iterations) 
+// { // Can specificy swaths of points to have special values. This is used only once, to efficiently initialize values. Separated into another function to prevent too many redundant condition checks with high N in the init..edge() func. 
+
+//   int i = blockDim.x * blockIdx.x +threadIdx.x; // Current block and current thread for the i-coord.
+//   int j = blockDim.y * blockIdx.y +threadIdx.y; // Current block and current thread for the j-coord.
+
+//   int index = i * N + j;
+//   if (i==0 || i==N) 
+//   {
+//     // So on...
+//   }
+// }
 
 
 void  gpu_heat_dist(float * playground, unsigned int N, unsigned int iterations)
 {
   int size = N * N * sizeof(float); 
   float 
-  
   
 }
 
