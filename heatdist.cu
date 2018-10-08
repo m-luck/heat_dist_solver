@@ -179,8 +179,6 @@ __global__ void spread_to_point(float * current, unsigned int N, unsigned int it
   int stride_i = blockDim.x * gridDim.x; // Next in line, if needed.
   int stride_j = blockDim.y * gridDim.y;  // Next in line, if needed. 
 
-  int index = ind_i * N + ind_j; 
-
   for ( int j = ind_j ; j < N ; j += stride_j )
     for ( int i = ind_i ; i < N ; i += stride_i )
     {
@@ -192,7 +190,7 @@ __global__ void spread_to_point(float * current, unsigned int N, unsigned int it
     // current[i * Nm2 + (j-1)], 
     // current[i * Nm2 + (j+1)];
 
-    fresh[i * Nm2 + j] = ( // Multiply N by i (the row #) since the input data still represents the matrix as a 1D structure. 
+    fresh[i * N + j] = ( // Multiply N by i (the row #) since the input data still represents the matrix as a 1D structure. 
       current[(i-1) * N + j] + 
       current[(i+1) * N + j] + 
       current[i * N + (j-1)] + 
@@ -283,15 +281,16 @@ void  gpu_heat_dist(float * playground, unsigned int N, unsigned int iterations)
   //   calcBlocks(Nm2, threadsPerBlock.y)
   // );
 
-  int blkcount = (N + threadsPerBlock - 1) / threadsPerBlock;
+  unsigned int blkcount = (N + threadsPerBlock - 1) / threadsPerBlock;
+
   dim3 numBlocks(blkcount,blkcount);
 
   for ( int i = 0 ; i < iterations ; i++ ) 
   {
     spread_to_point<<<numBlocks,threadsPerBlock>>>(current, N, iterations, fresh);
-    cudaDeviceSyncronize();
+    cudaDeviceSynchronize();
     overwrite_current_iteration<<<numBlocks,threadsPerBlock>>>(current, N, iterations, fresh);
-    cudaDeviceSyncronize();
+    cudaDeviceSynchronize();
 
     int lessAmt = 10; 
     for ( i = 0 ; i < lessAmt ; i++ )
