@@ -168,34 +168,55 @@ void  seq_heat_dist(float * playground, unsigned int N, unsigned int iterations)
 
 // There will be two main functions that can be parallelized: one to average individual points around each point and one to update the current matrix's points for the next iteration to work with. 
 
-__global__ void spread_to_point(int N, float * current, float * fresh) 
+__global__ void spread_to_point(float * current, unsigned int N, unsigned int iter, float * fresh) 
 { // Averages the four surrounding points to update a single point.
 
   // Let's make a grid-stride with a 2D grid, to fit the problem.
 
-  int i = blockDim.x * blockIdx.x +threadIdx.x; // Current block and current thread for the i-coord.
-  int j = blockDim.y * blockIdx.y +threadIdx.y; // Current block and current thread for the j-coord.
+  unsigned int ind_i = blockDim.x * blockIdx.x + threadIdx.x; // Current block and current thread for the i-coord.
+  unsigned int ind_j = blockDim.y * blockIdx.y + threadIdx.y; // Current block and current thread for the j-coord.
 
-  if ((i > 0 && i < N-1) && (j > 0 && j < N-1)) 
-    fresh[i * N + j] = ( // Multiply N by i (the row #) since the input data still represents the matrix as a 1D structure. 
+  int stride_i = blockDim.x * gridDim.x; // Next in line, if needed.
+  int stride_j = blockDim.y * gridDim.y;  // Next in line, if needed. 
+
+  int index = ind_i * N + ind_j; 
+
+  for ( int j = ind_j ; j < N ; j += stride_j )
+    for ( int i = ind_i ; i < N ; i += stride_i )
+    {
+
+    // Uncomment here if you want to take advantage of shared memory. 
+    // __shared__ 
+    // current[(i-1) * Nm2 + j], 
+    // current[(i+1) * Nm2 + j], 
+    // current[i * Nm2 + (j-1)], 
+    // current[i * Nm2 + (j+1)];
+
+    fresh[i * Nm2 + j] = ( // Multiply N by i (the row #) since the input data still represents the matrix as a 1D structure. 
       current[(i-1) * N + j] + 
       current[(i+1) * N + j] + 
       current[i * N + (j-1)] + 
       current[i * N + (j+1)]
       ) / 4;
+    }
 }
 
-__global__ void overwrite_current_iteration(int N, float * current, float * fresh) 
+__global__ void overwrite_current_iteration(float * current, unsigned int N, unsigned int iter, float * fresh) 
 { // After computing all values using the old iteration, this function will make the new values take the old values' places. 
 
-  // Again let's make a grid-stride with a 2D grid only to fit the problem.
+  // Again let's make a grid-stride with a 2D grid to fit the problem.
 
-  int i = blockDim.x * blockIdx.x +threadIdx.x; // Current block and current thread for the i-coord.
-  int j = blockDim.y * blockIdx.y +threadIdx.y; // Current block and current thread for the j-coord.
+  unsigned int ind_i = blockDim.x * blockIdx.x + threadIdx.x; // Current block and current thread for the i-coord.
+  unsigned int ind_j = blockDim.y * blockIdx.y + threadIdx.y; // Current block and current thread for the j-coord.
 
-  int index = i * N + j; 
+  int stride_i = blockDim.x * gridDim.x;
+  int stride_j = blockDim.y * gridDim.y;   
 
-  current[index] = fresh[index];
+  int index = ind_i * N + ind_j; 
+
+  for ( int j = ind_j+1 ; j < N-1 ; j += stride_j )
+    for ( int i = ind_i+1 ; i < N-1 ; i += stride_i )
+      current[index] = fresh[index];
 }
 
 // The two commented functions below were anticipating writing parallel code to initialize the mesh temperatures (parallelized instead of sequential), however that is already done sequentially in main(), so the two below are not needed, but may be conceptually useful.  
@@ -234,12 +255,50 @@ __global__ void overwrite_current_iteration(int N, float * current, float * fres
 //   }
 // }
 
+int calcBlocks(unsigned int Nm2, int tpb) 
+{
+  int remain = Nm2 % tpb;
+  int sheared = Nm2 - remain;
+  int result = (sheared / tpb) + 1;
+
+  return result; 
+}
 
 void  gpu_heat_dist(float * playground, unsigned int N, unsigned int iterations)
-{
-  int size = N * N * sizeof(float); 
-  float 
+{ 
+  float *current, *fresh; 
+  cudaMallocManaged(&current, N*sizeof(float));
+  cudaMallocManaged(&fresh, N*sizeof(float));
+
+  cudaMemcpy(current, playground, N*sizeof(float), cudaMemcpyHostToDevice); 
   
+  // Tiling setup - how many threads per block, and how many blocks in the grid. 
+
+  dim3 threadsPerBlock(16, 16);
+
+  // If you want to control the block calculation, then uncomment here and comment the other numBlocks(...) declaration. 
+  // dim3 numBlocks
+  // (
+  //   calcBlocks(Nm2, threadsPerBlock.x), 
+  //   calcBlocks(Nm2, threadsPerBlock.y)
+  // );
+
+  int blkcount = (N + threadsPerBlock - 1) / threadsPerBlock;
+  dim3 numBlocks(blkcount,blkcount);
+
+  for ( int i = 0 ; i < iterations ; i++ ) 
+  {
+    spread_to_point<<<numBlocks,threadsPerBlock>>>(current, N, iterations, fresh);
+    cudaDeviceSyncronize();
+    overwrite_current_iteration<<<numBlocks,threadsPerBlock>>>(current, N, iterations, fresh);
+    cudaDeviceSyncronize();
+
+    int lessAmt = 10; 
+    for ( i = 0 ; i < lessAmt ; i++ )
+      printf("%s\n", current[i]);
+  }
+
+  cudaMemcpy(playground, current, N*sizeof(float), cudaMemcpyDeviceToHost);
 }
 
 
