@@ -96,13 +96,13 @@ int main(int argc, char * argv[])
     playground[index(N-1,i,N)] = 150;
   
   if( !type_of_device ) // The CPU sequential version
-  {  
+  { 
     start = clock();
     seq_heat_dist(playground, N, iterations);
     end = clock();
   }
   else  // The GPU version
-  {
+  {   
      start = clock();
      gpu_heat_dist(playground, N, iterations); 
      end = clock();    
@@ -179,8 +179,8 @@ __global__ void spread_to_point(float * current, unsigned int N, unsigned int it
   int stride_i = blockDim.x * gridDim.x; // Next in line, if needed.
   int stride_j = blockDim.y * gridDim.y;  // Next in line, if needed. 
 
-  for ( int j = ind_j ; j < N ; j += stride_j )
-    for ( int i = ind_i ; i < N ; i += stride_i )
+  for ( int j = ind_j+1 ; j < N-1 ; j += stride_j )
+    for ( int i = ind_i+1 ; i < N-1 ; i += stride_i )
     {
 
     // Uncomment here if you want to take advantage of shared memory. 
@@ -263,15 +263,18 @@ int calcBlocks(unsigned int Nm2, int tpb)
 }
 
 void  gpu_heat_dist(float * playground, unsigned int N, unsigned int iterations)
-{ 
+{
+  printf("before"); 
   float *current, *fresh; 
-  cudaMallocManaged(&current, N*sizeof(float));
-  cudaMallocManaged(&fresh, N*sizeof(float));
+  cudaMallocManaged(&current, N*N*sizeof(float));
+  cudaMallocManaged(&fresh, N*N*sizeof(float));
 
-  cudaMemcpy(current, playground, N*sizeof(float), cudaMemcpyHostToDevice); 
-  
+  printf("here");
+  cudaMemcpy(current, playground, N*N*sizeof(float), cudaMemcpyHostToDevice); 
+  cudaMemset(fresh, 0, N*N*sizeof(int));
   // Tiling setup - how many threads per block, and how many blocks in the grid. 
 
+  unsigned int blkcount = (N + 16 - 1) / 16;
   dim3 threadsPerBlock(16, 16);
 
   // If you want to control the block calculation, then uncomment here and comment the other numBlocks(...) declaration. 
@@ -280,9 +283,6 @@ void  gpu_heat_dist(float * playground, unsigned int N, unsigned int iterations)
   //   calcBlocks(Nm2, threadsPerBlock.x), 
   //   calcBlocks(Nm2, threadsPerBlock.y)
   // );
-
-  unsigned int blkcount = (N + threadsPerBlock - 1) / threadsPerBlock;
-
   dim3 numBlocks(blkcount,blkcount);
 
   for ( int i = 0 ; i < iterations ; i++ ) 
@@ -293,11 +293,16 @@ void  gpu_heat_dist(float * playground, unsigned int N, unsigned int iterations)
     cudaDeviceSynchronize();
 
     int lessAmt = 10; 
-    for ( i = 0 ; i < lessAmt ; i++ )
+    for ( int j = 0 ; j < lessAmt ; j++ )
       printf("%s\n", current[i]);
   }
-
+	
   cudaMemcpy(playground, current, N*sizeof(float), cudaMemcpyDeviceToHost);
+  cudaFree(&current);
+  cudaFree(&fresh);
+
+
 }
+
 
 
