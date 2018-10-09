@@ -264,12 +264,10 @@ int calcBlocks(unsigned int Nm2, int tpb)
 
 void  gpu_heat_dist(float * playground, unsigned int N, unsigned int iterations)
 {
-  printf("before"); 
   float *current, *fresh; 
   cudaMallocManaged(&current, N*N*sizeof(float));
   cudaMallocManaged(&fresh, N*N*sizeof(float));
-
-  printf("here");
+  
   cudaMemcpy(current, playground, N*N*sizeof(float), cudaMemcpyHostToDevice); 
   cudaMemset(fresh, 0, N*N*sizeof(int));
   // Tiling setup - how many threads per block, and how many blocks in the grid. 
@@ -293,8 +291,9 @@ void  gpu_heat_dist(float * playground, unsigned int N, unsigned int iterations)
     cudaDeviceSynchronize();
 
     int lessAmt = 10; 
-    for ( int j = 0 ; j < lessAmt ; j++ )
-      printf("%s\n", current[i]);
+    for ( int j = N ; j < N+lessAmt ; j++ )
+      printf("%.5f", current[j]);
+    printf("\n");
   }
 	
   cudaMemcpy(playground, current, N*sizeof(float), cudaMemcpyDeviceToHost);
