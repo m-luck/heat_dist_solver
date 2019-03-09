@@ -1,23 +1,4 @@
-/*
- *  Please write your name and net ID below
- *  
- *  Last name: Lukiman
- *  First name: Michael
- *  Net ID: mll469
- * 
- */
 
-
-/* 
- * This file contains the code for doing the heat distribution problem. 
- * You do not need to modify anything except starting  gpu_heat_dist() at the bottom
- * of this file.
- * In gpu_heat_dist() you can organize your data structure and the call to your
- * kernel(s) that you need to write to. 
- * 
- * You compile with:
- * 		nvcc -o heatdist -arch=sm_60 heatdist.cu   
- */
 
 #include <cuda.h>
 #include <stdlib.h>
